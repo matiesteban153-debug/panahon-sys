@@ -1,0 +1,286 @@
+# PROMPT – REPORTE INDIVIDUAL POR EMPLEADO (PDF Y EXCEL)
+## Para pegar en el chat de Figma Make
+
+---
+
+## CONTEXTO
+
+Agregar la funcionalidad de exportar un reporte individual por empleado
+desde la sección de Reportes. El reporte debe mostrar el detalle completo
+de horas trabajadas, registros y total a pagar para el período seleccionado.
+
+Por defecto el período es el mes actual, pero el admin puede filtrar
+por rango de fechas personalizado.
+
+**No modificar:** la vista general de Reportes existente, el fichaje,
+registros, empleados ni ninguna otra pantalla.
+
+---
+
+## CAMBIO 1 — Botón de reporte individual en la tabla de Reportes
+
+En la tabla del resumen mensual de Reportes, agregar una columna de acciones
+al final de cada fila con un botón de descarga:
+
+```
+| Empleado | Días | Horas | Valor/h | Total | Acciones |
+|----------|------|-------|---------|-------|----------|
+| María G. | 22   | 176hs | $5.000  | $880k | [↓ PDF] [↓ Excel] |
+```
+
+Los botones deben ser pequeños e icónicos para no cargar la tabla:
+- Ícono PDF: rojo suave con ícono de documento
+- Ícono Excel: verde suave con ícono de tabla
+- Tooltip al hacer hover: "Descargar reporte de María González"
+
+---
+
+## CAMBIO 2 — Modal de configuración antes de exportar
+
+Al tocar cualquiera de los dos botones, mostrar un modal de confirmación
+que permita ajustar el período antes de descargar:
+
+```
+┌─────────────────────────────────────┐
+│ Reporte de María González           │
+│                                     │
+│ Período                             │
+│ Desde: [ 01/06/2026 ]               │
+│ Hasta: [ 30/06/2026 ]               │
+│                                     │
+│ □ Incluir detalle día a día         │
+│ □ Incluir registros incompletos     │
+│                                     │
+│ [Cancelar]  [↓ Descargar PDF]       │
+│             [↓ Descargar Excel]     │
+└─────────────────────────────────────┘
+```
+
+**Valores por defecto:**
+- Desde: primer día del mes actual
+- Hasta: último día del mes actual
+- Incluir detalle día a día: activado
+- Incluir registros incompletos: desactivado
+
+---
+
+## CAMBIO 3 — Query de datos para el reporte individual
+
+```js
+async function getDatosReporteEmpleado(empleadoId, desde, hasta) {
+  // Datos del empleado
+  const { data: empleado } = await supabase
+    .from('empleados')
+    .select('nombre_completo, valor_hora, jornada_horas')
+    .eq('id', empleadoId)
+    .single()
+
+  // Registros del período
+  const query = supabase
+    .from('registros')
+    .select('fecha, hora_entrada, hora_salida, horas_totales, sueldo_dia, editado_manual, sospechoso')
+    .eq('empleado_id', empleadoId)
+    .gte('fecha', desde)
+    .lte('fecha', hasta)
+    .order('fecha', { ascending: true })
+
+  const { data: registros } = await query
+
+  // Calcular totales
+  const registrosCompletos = registros.filter(r => r.hora_salida !== null)
+  const totalHoras = registrosCompletos.reduce((acc, r) => acc + parseFloat(r.horas_totales || 0), 0)
+  const totalPagar = registrosCompletos.reduce((acc, r) => acc + parseFloat(r.sueldo_dia || 0), 0)
+  const diasTrabajados = registrosCompletos.length
+
+  return { empleado, registros, totalHoras, totalPagar, diasTrabajados }
+}
+```
+
+---
+
+## CAMBIO 4 — Exportación PDF individual
+
+Usar `jsPDF` + `jspdf-autotable` (ya instalados).
+
+```js
+function exportarPDFEmpleado(datos, desde, hasta) {
+  const { empleado, registros, totalHoras, totalPagar, diasTrabajados } = datos
+  const doc = new jsPDF()
+
+  // ── HEADER naranja ────────────────────────────────
+  doc.setFillColor(249, 115, 22)
+  doc.rect(0, 0, 210, 35, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(20)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Panahon', 14, 15)
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Reporte individual de empleado', 14, 23)
+
+  // ── DATOS DEL EMPLEADO ────────────────────────────
+  doc.setTextColor(26, 26, 26)
+  doc.setFontSize(16)
+  doc.setFont('helvetica', 'bold')
+  doc.text(empleado.nombre_completo, 14, 48)
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(107, 114, 128)
+  doc.text(`Período: ${desde} al ${hasta}`, 14, 56)
+  doc.text(`Valor hora: $${parseFloat(empleado.valor_hora).toLocaleString('es-AR')}`, 14, 62)
+  doc.text(`Generado el: ${new Date().toLocaleDateString('es-AR')}`, 14, 68)
+
+  // ── RESUMEN ───────────────────────────────────────
+  doc.setFillColor(255, 244, 236)
+  doc.rect(14, 74, 182, 22, 'F')
+
+  doc.setTextColor(249, 115, 22)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.text(`${diasTrabajados} días trabajados`, 20, 83)
+  doc.text(`${parseFloat(totalHoras).toFixed(2)} hs totales`, 80, 83)
+  doc.text(`$${parseFloat(totalPagar).toLocaleString('es-AR')} total`, 145, 83)
+
+  doc.setTextColor(107, 114, 128)
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Días trabajados', 20, 90)
+  doc.text('Horas totales', 80, 90)
+  doc.text('Total a pagar', 145, 90)
+
+  // ── TABLA DE REGISTROS ────────────────────────────
+  const filas = registros
+    .filter(r => r.hora_salida !== null)
+    .map(r => [
+      new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+      new Date(r.hora_entrada).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      new Date(r.hora_salida).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      parseFloat(r.horas_totales).toFixed(2) + ' hs',
+      '$' + parseFloat(r.sueldo_dia).toLocaleString('es-AR'),
+      r.editado_manual ? 'Editado' : r.sospechoso ? '⚠️' : '✓'
+    ])
+
+  autoTable(doc, {
+    startY: 102,
+    head: [['Fecha', 'Entrada', 'Salida', 'Horas', 'Importe', 'Estado']],
+    body: filas,
+    foot: [[
+      `Total: ${diasTrabajados} días`,
+      '', '',
+      parseFloat(totalHoras).toFixed(2) + ' hs',
+      '$' + parseFloat(totalPagar).toLocaleString('es-AR'),
+      ''
+    ]],
+    headStyles: { fillColor: [249, 115, 22], textColor: [255, 255, 255], fontStyle: 'bold' },
+    footStyles: { fillColor: [244, 245, 247], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 249, 250] },
+    columnStyles: {
+      0: { cellWidth: 35 },
+      1: { halign: 'center' },
+      2: { halign: 'center' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+      5: { halign: 'center', cellWidth: 20 }
+    },
+    margin: { left: 14, right: 14 }
+  })
+
+  // ── FOOTER ────────────────────────────────────────
+  const pageCount = doc.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8)
+    doc.setTextColor(156, 163, 175)
+    doc.text(
+      `Panahon — Reporte de ${empleado.nombre_completo} — Página ${i} de ${pageCount}`,
+      14,
+      doc.internal.pageSize.height - 10
+    )
+  }
+
+  doc.save(`Panahon_${empleado.nombre_completo.replace(' ', '_')}_${desde}_${hasta}.pdf`)
+}
+```
+
+---
+
+## CAMBIO 5 — Exportación Excel individual
+
+```js
+function exportarExcelEmpleado(datos, desde, hasta) {
+  const { empleado, registros, totalHoras, totalPagar, diasTrabajados } = datos
+  const BOM = '\uFEFF'
+
+  const encabezado = [
+    `Reporte individual — ${empleado.nombre_completo}`,
+    `Período: ${desde} al ${hasta}`,
+    `Valor hora: $${parseFloat(empleado.valor_hora).toLocaleString('es-AR')}`,
+    `Generado por Panahon`,
+    ``
+  ].join('\n')
+
+  const columnas = ['Fecha', 'Entrada', 'Salida', 'Horas', 'Importe', 'Estado']
+
+  const filas = registros
+    .filter(r => r.hora_salida !== null)
+    .map(r => [
+      new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-AR'),
+      new Date(r.hora_entrada).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      new Date(r.hora_salida).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      parseFloat(r.horas_totales).toFixed(2),
+      parseFloat(r.sueldo_dia).toFixed(2),
+      r.editado_manual ? 'Editado manualmente' : r.sospechoso ? 'Revisar' : 'Completo'
+    ].join(','))
+
+  const filaTotales = [
+    `Total: ${diasTrabajados} días`,
+    '', '',
+    parseFloat(totalHoras).toFixed(2),
+    parseFloat(totalPagar).toFixed(2),
+    ''
+  ].join(',')
+
+  const contenido = [
+    encabezado,
+    columnas.join(','),
+    ...filas,
+    filaTotales
+  ].join('\n')
+
+  const blob = new Blob([BOM + contenido], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `Panahon_${empleado.nombre_completo.replace(' ', '_')}_${desde}_${hasta}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+```
+
+---
+
+## FLUJO COMPLETO
+
+```
+Admin en Reportes
+  → Ve tabla con resumen por empleado
+  → Toca [↓ PDF] o [↓ Excel] en la fila de un empleado
+  → Se abre modal con período pre-cargado (mes actual)
+  → Admin ajusta fechas si necesita
+  → Toca "Descargar PDF" o "Descargar Excel"
+  → Se descarga el archivo con el reporte individual
+```
+
+---
+
+## LO QUE NO HAY QUE TOCAR
+
+- El reporte general mensual existente (exportar todos los empleados)
+- La query `resumen_mensual` de Supabase
+- Los registros, fichaje, empleados ni ninguna otra pantalla
+- Las librerías jsPDF y jspdf-autotable ya instaladas

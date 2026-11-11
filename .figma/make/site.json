@@ -1,0 +1,15 @@
+{
+  "title": "Panahon",
+  "description": "Simplify employee time tracking with QR codes, allowing SMEs to manage hours and payroll effortlessly without apps or logins, saving time and reducing hassle.",
+  "language": "ES",
+  "robots": {
+    "index": false
+  },
+  "icons": {
+    "icon": "/.figma/make/favicon.png"
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
