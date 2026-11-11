@@ -4,7 +4,7 @@
  * The demo account must exist in Supabase linked to the empresa DEMO-PANAHON-001.
  * Change these credentials to match the actual demo user in your Supabase project.
  */
-export const DEMO_EMAIL    = import.meta.env.VITE_DEMO_EMAIL ?? "demo@panahon.app";
+export const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL ?? "demo@panahon.app";
 export const DEMO_PASSWORD = "demo-panahon-2025";
 
 /**
