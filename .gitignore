@@ -44,6 +44,7 @@ dist/
 build/
 .cache/
 .env*
+!.env.example
 vite.config.*.timestamp-*
 *-debug.log*
 logs/
