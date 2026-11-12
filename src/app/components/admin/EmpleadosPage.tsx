@@ -156,11 +156,7 @@ export function EmpleadosPage() {
         empleado_id: editingId ?? undefined,
         resultado: "ok",
         metadata: {
-          nombre: form.nombre_completo,
           tipo_jornada: form.tipo_jornada,
-          valor_hora: esMensual || esJornada ? 0 : Number(form.valor_hora),
-          sueldo_base_mensual: esMensual ? Number(form.sueldo_base_mensual) : null,
-          valor_jornada: esJornada ? Number(form.valor_jornada) : null,
           jornada_horas: Number(form.jornada_horas),
           activo: form.activo,
         },
@@ -174,7 +170,6 @@ export function EmpleadosPage() {
         empresa_id: empresaId,
         resultado: "error",
         error_mensaje: err?.message,
-        metadata: { nombre: form.nombre_completo },
       });
       setOperationError(getFriendlyError(err, "No pudimos guardar el empleado. Revisá los datos e intentá nuevamente."));
     } finally {
@@ -193,7 +188,6 @@ export function EmpleadosPage() {
         empresa_id: empresaId,
         empleado_id: deleteTarget.id,
         resultado: "ok",
-        metadata: { nombre: deleteTarget.nombre_completo },
       });
       await fetchEmps();
       setDeleteTarget(null);

@@ -3,8 +3,8 @@
 
 // Fallback to hardcoded values for local dev without .env.local
 export const projectId: string =
-  import.meta.env.VITE_SUPABASE_PROJECT_ID ?? "yfwpkgntqijcloqsenxq";
+  import.meta.env.VITE_SUPABASE_PROJECT_ID || "yfwpkgntqijcloqsenxq";
 
 export const publicAnonKey: string =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ??
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlmd3BrZ250cWlqY2xvcXNlbnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5Njc2NTUsImV4cCI6MjA4MzU0MzY1NX0.ZLZy5_a9yC6_pzUQ5FD6tP-tLgpHQD90UP7j-1hwseo";

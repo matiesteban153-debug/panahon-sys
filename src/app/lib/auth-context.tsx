@@ -276,7 +276,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           evento: "admin_login",
           resultado: "error",
           error_mensaje: error.message,
-          metadata: { email },
         });
         return { error: getFriendlyError(error, "No pudimos iniciar sesión. Revisá tus datos e intentá nuevamente.") };
       }
@@ -297,7 +296,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             evento: "admin_login",
             empresa_id: profile?.empresa_id,
             resultado: "ok",
-            metadata: { email },
           });
         });
       }
@@ -340,7 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           evento: "admin_signup",
           resultado: "error",
           error_mensaje: signUpError.message,
-          metadata: { email, step: "auth_signup" },
+          metadata: { step: "auth_signup" },
         });
         return { error: msg };
       }
@@ -374,7 +372,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           evento: "admin_signup",
           resultado: "error",
           error_mensaje: serverData.error || "Error al configurar la empresa",
-          metadata: { email, step: "server_setup" },
+          metadata: { step: "server_setup" },
         });
         return { error: getFriendlyError(serverData, "No pudimos configurar la empresa. Revisá tu conexión e intentá nuevamente.") };
       }
@@ -384,7 +382,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         evento: "admin_signup",
         resultado: "ok",
         metadata: {
-          email,
           company_name: metadata.empresa_nombre,
           rubro: metadata.rubro,
         },

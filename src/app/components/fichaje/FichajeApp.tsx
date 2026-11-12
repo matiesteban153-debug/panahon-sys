@@ -141,7 +141,7 @@ export function FichajeApp() {
             resultado: "error",
             error_codigo: "sin_empleados",
             error_mensaje: "No se encontraron empleados para este QR",
-            metadata: { qr_token: qrToken },
+            metadata: { qr_token_presente: !!qrToken },
           });
           setScreen({ type: "error", message: "No se encontraron empleados para este código QR." });
           dataReadyRef.current = true;
@@ -401,7 +401,6 @@ export function FichajeApp() {
           hora_fichaje: result?.hora ?? null,
           horas_trabajadas: result?.horas_trabajadas ?? null,
           es_feriado: result?.es_feriado ?? false,
-          sueldo_dia: result?.sueldo_dia ?? null,
           gps_precision_m: location?.accuracy ?? null,
         },
       });

@@ -12,7 +12,7 @@ getMercadoPago().catch(() => {
 });
 
 const SENTRY_DSN: string =
-  import.meta.env.VITE_SENTRY_DSN ??
+  import.meta.env.VITE_SENTRY_DSN ||
   "https://66580d47691db2468d70e4e7d1c94b13@o4511735325851648.ingest.us.sentry.io/4511735337648128";
 
 if (!Sentry.isInitialized()) {
@@ -29,7 +29,7 @@ if (!Sentry.isInitialized()) {
 }
 
 const POSTHOG_KEY: string =
-  import.meta.env.VITE_POSTHOG_KEY ?? "phc_A23DBA6CKY6eG9hmfC5quZQHqAQfsynR5ssT66GHJJeS";
+  import.meta.env.VITE_POSTHOG_KEY || "phc_A23DBA6CKY6eG9hmfC5quZQHqAQfsynR5ssT66GHJJeS";
 const POSTHOG_HOST = "https://us.i.posthog.com";
 
 
@@ -77,21 +77,23 @@ export default function App() {
   useEffect(() => {
     if (document.getElementById('google-analytics')) return;
 
+    const gaId = import.meta.env.VITE_GA_ID || 'G-747PKSER1M';
     const script1 = document.createElement('script');
     script1.id = 'google-analytics';
     script1.async = true;
-    const gaId = import.meta.env.VITE_GA_ID ?? 'G-747PKSER1M';
     script1.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`;
     document.head.appendChild(script1);
 
-    const script2 = document.createElement('script');
-    script2.innerHTML = `
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', '${gaId}');
-    `;
-    document.head.appendChild(script2);
+    const w = window as any;
+    w.dataLayer = w.dataLayer || [];
+    if (typeof w.gtag !== 'function') {
+      w.gtag = function gtag() {
+        // gtag.js expects raw `arguments` entries inside dataLayer
+        w.dataLayer.push(arguments);
+      };
+    }
+    w.gtag('js', new Date());
+    w.gtag('config', gaId);
   }, []);
 
   return (

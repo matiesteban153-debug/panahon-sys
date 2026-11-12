@@ -3,9 +3,10 @@
  */
 
 export const MP_PUBLIC_KEY: string =
-  import.meta.env.VITE_MP_PUBLIC_KEY ?? "APP_USR-84dddf27-0dad-41d7-abea-1df5830f50d1";
+  import.meta.env.VITE_MP_PUBLIC_KEY || "APP_USR-84dddf27-0dad-41d7-abea-1df5830f50d1";
 
-export const MP_PREAPPROVAL_PLAN_ID = "35a2edd6ac664f53b80dba813d50fef5";
+export const MP_PREAPPROVAL_PLAN_ID: string =
+  import.meta.env.VITE_MP_PREAPPROVAL_PLAN_ID || "35a2edd6ac664f53b80dba813d50fef5";
 
 // El checkout se obtiene exclusivamente del servidor para una suscripcion individual.
 

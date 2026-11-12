@@ -107,8 +107,6 @@ function useGeolocation(empresaId: string | null, empleadoId: string): GeoResult
           resultado: "ok",
           metadata: {
             precision_m: pos.coords.accuracy,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
           },
         });
         setLocation({
