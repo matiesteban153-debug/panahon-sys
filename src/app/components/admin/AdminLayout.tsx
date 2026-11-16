@@ -6,7 +6,7 @@ import { TrialWarningBanner } from "./TrialWarningBanner";
 import { useAuth } from "../../lib/auth-context";
 import { loadClient } from "../../lib/supabase";
 import { aceptarTerminos, getTerminosAceptados, verificarEstadoEmpresaEmpleado } from "../../lib/api";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { isDemoUser, DEMO_RESTRICTED_PATHS } from "../../lib/demo";
 import { TermsWall } from "./TermsWall";
 
@@ -20,7 +20,7 @@ function calcTrialDaysLeft(fechaVencimiento: string): number {
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 export function AdminLayout() {
-  const { session, loading, admin } = useAuth();
+  const { session, loading, admin, adminLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -143,7 +143,7 @@ export function AdminLayout() {
     trialDaysLeft >= 0 &&
     trialDaysLeft <= 3;
 
-  if (loading) {
+  if (loading || (session && adminLoading)) {
     return (
       <div
         className="min-h-screen bg-[#F4F5F7] dark:bg-zinc-950 flex items-center justify-center transition-colors duration-200"
@@ -152,7 +152,7 @@ export function AdminLayout() {
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-[#F97316] animate-spin" />
           <p className="text-[#1A1A1A]/50 dark:text-zinc-400" style={{ fontSize: "0.875rem" }}>
-            Cargando...
+            Verificando permisos...
           </p>
         </div>
       </div>
@@ -160,6 +160,49 @@ export function AdminLayout() {
   }
 
   if (!session) return null;
+
+  if (!admin) {
+    return (
+      <div
+        className="min-h-screen bg-[#F4F5F7] dark:bg-zinc-950 flex items-center justify-center p-4 transition-colors duration-200"
+        style={{ fontFamily: "'DM Sans', sans-serif" }}
+      >
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-red-100 dark:border-red-950/40 p-6 sm:p-8 text-center flex flex-col items-center">
+          <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-950/30 flex items-center justify-center mb-4">
+            <ShieldAlert className="w-7 h-7 text-red-600 dark:text-red-400" />
+          </div>
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
+            Acceso no autorizado
+          </h1>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4 leading-relaxed">
+            Tu cuenta <strong className="text-zinc-800 dark:text-zinc-200">{session.user?.email || "actual"}</strong> no tiene un perfil de administrador asignado o tu empresa no se encuentra vinculada.
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-500 mb-6">
+            Si creés que esto es un error, comunicate con el administrador de tu cuenta o soporte técnico de Panahon.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 w-full">
+            <button
+              type="button"
+              onClick={async () => {
+                await signOut();
+                navigate("/admin/login", { replace: true });
+              }}
+              className="w-full py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium text-sm transition-colors shadow-sm"
+            >
+              Cerrar sesión
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="w-full py-2.5 px-4 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium text-sm transition-colors"
+            >
+              Ir al inicio
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const aceptarTerminosEmpresa = async () => {
     if (!admin?.empresa_id) throw new Error("Empresa no disponible");

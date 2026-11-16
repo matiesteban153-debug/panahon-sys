@@ -11,6 +11,7 @@ import { projectId, publicAnonKey } from "../../../utils/supabase/info";
 import { useIdleTimeout } from "./useIdleTimeout";
 import { trackEvent } from "./telemetry";
 import { getFriendlyError } from "./errorUtils";
+import { isDemoUser } from "./demo";
 
 const supabaseUrl = `https://${projectId}.supabase.co`;
 const SERVER_URL = `https://${projectId}.supabase.co/functions/v1/make-server-bdf30ab0`;
@@ -32,6 +33,7 @@ interface AuthContextType {
   session: AuthSession | null;
   admin: AdminProfile | null;
   loading: boolean;
+  adminLoading: boolean;
   signIn: (
     email: string,
     password: string
@@ -56,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adminLoading, setAdminLoading] = useState(false);
   const supabaseRef = useRef<any>(null);
 
   // ── Idle timeout: cerrar sesión después de 5 minutos de inactividad ──
@@ -72,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setSession(null);
       setAdmin(null);
+      setAdminLoading(false);
     },
     idleTime: 5 * 60 * 1000, // 5 minutos
     enabled: !!session, // Solo activar cuando hay sesión activa
@@ -89,16 +93,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session]);
 
-  // ── Build fallback admin profile from user_metadata ──
-  const buildAdminFromSession = (s: any): AdminProfile | null => {
-    if (!s?.user) return null;
-    const meta = s.user.user_metadata || {};
+  // ── Fallback ONLY for verified demo account if DB query fails (Finding C4) ──
+  const getDemoFallbackProfile = (s: any): AdminProfile | null => {
+    const email = s?.user?.email;
+    if (!email || !isDemoUser(email)) return null;
     return {
       id: s.user.id,
-      empresa_id: meta.empresa_id || "",
-      nombre_completo: meta.name || s.user.email?.split("@")[0] || "Admin",
-      email: s.user.email || "",
-      rol: meta.rol || "admin",
+      empresa_id: "e1769ac7-80d1-43d3-a09b-15b9345d1737",
+      nombre_completo: "Usuario Demo",
+      email,
+      rol: "demo",
     };
   };
 
@@ -110,14 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userId = s?.user?.id;
     const accessToken = s?.access_token;
     if (!userId || !accessToken) {
-      console.warn("[Auth] fetchAdminProfile: no userId or accessToken, using fallback");
-      return buildAdminFromSession(s);
+      console.warn("[Auth] fetchAdminProfile: no userId or accessToken");
+      return getDemoFallbackProfile(s);
     }
 
     console.log("[Auth] fetchAdminProfile: fetching via REST for user", userId);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
       const url = `${supabaseUrl}/rest/v1/perfiles_admin?select=id,empresa_id,nombre_completo,email,rol&id=eq.${userId}`;
       const res = await fetch(url, {
@@ -134,34 +138,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        console.warn("[Auth] fetchAdminProfile: REST error", res.status, body, "- using fallback");
-        return buildAdminFromSession(s);
+        console.warn("[Auth] fetchAdminProfile: REST error", res.status, body);
+        return getDemoFallbackProfile(s);
       }
 
       const data = await res.json();
-      if (data && data.id) {
+      if (data && data.id && data.empresa_id) {
         console.log("[Auth] fetchAdminProfile: got profile from DB, empresa_id:", data.empresa_id);
         return data as AdminProfile;
       }
 
-      console.warn("[Auth] fetchAdminProfile: no profile row found, using fallback");
-      return buildAdminFromSession(s);
+      console.warn("[Auth] fetchAdminProfile: no profile row found in DB");
+      return getDemoFallbackProfile(s);
     } catch (err: any) {
       if (err.name === "AbortError") {
-        console.warn("[Auth] fetchAdminProfile: request aborted after 5s timeout, using fallback");
+        console.warn("[Auth] fetchAdminProfile: request aborted after 6s timeout");
       } else {
-        console.warn("[Auth] fetchAdminProfile: fetch exception:", err.message, "- using fallback");
+        console.warn("[Auth] fetchAdminProfile: fetch exception:", err.message);
       }
-      return buildAdminFromSession(s);
+      return getDemoFallbackProfile(s);
     }
   };
 
-  // ── Load admin profile in background (never blocks session/loading) ──
+  // ── Load admin profile in background ──
   const loadAdminInBackground = (client: any, s: any) => {
-    fetchAdminProfile(client, s).then((profile) => {
-      console.log("[Auth] loadAdminInBackground: resolved, setting admin");
-      setAdmin(profile);
-    });
+    setAdminLoading(true);
+    fetchAdminProfile(client, s)
+      .then((profile) => {
+        console.log("[Auth] loadAdminInBackground: resolved, setting admin", profile ? profile.id : "null");
+        setAdmin(profile);
+        if (profile) {
+          trackEvent({
+            evento: "admin_login",
+            empresa_id: profile.empresa_id,
+            resultado: "ok",
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("[Auth] loadAdminInBackground error:", err);
+        setAdmin(null);
+      })
+      .finally(() => {
+        setAdminLoading(false);
+      });
   };
 
   // ── Step 1: Lazy-load Supabase client ──
@@ -241,6 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loadAdminInBackground(client, s);
       } else {
         setAdmin(null);
+        setAdminLoading(false);
       }
     });
 
@@ -289,15 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fetch admin profile in background - DO NOT AWAIT
       if (data.session?.user?.id) {
         console.log("[Auth] signIn: starting background profile fetch");
-        fetchAdminProfile(client, data.session).then((profile) => {
-          setAdmin(profile);
-          // Track login success once we have empresa_id
-          trackEvent({
-            evento: "admin_login",
-            empresa_id: profile?.empresa_id,
-            resultado: "ok",
-          });
-        });
+        loadAdminInBackground(client, data.session);
       }
 
       return { error: null };
@@ -411,19 +424,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── signOut ──
   const signOut = async () => {
     const client = supabaseRef.current;
-    if (!client) return;
-    console.log("[Auth] signOut: signing out");
-    try {
-      await client.auth.signOut();
-    } catch (err: any) {
-      console.error("[Auth] signOut error:", err);
+    if (client) {
+      console.log("[Auth] signOut: signing out");
+      try {
+        await client.auth.signOut();
+      } catch (err: any) {
+        console.error("[Auth] signOut error:", err);
+      }
     }
     setSession(null);
     setAdmin(null);
+    setAdminLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ session, admin, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ session, admin, loading, adminLoading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
