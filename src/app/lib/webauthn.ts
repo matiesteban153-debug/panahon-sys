@@ -75,8 +75,12 @@ function serialize(credential: PublicKeyCredential) {
 
 export async function registerEmployeeDevice(employeeId: string, qrToken: string, signal: AbortSignal) {
   assertSupported();
-  localStorage.setItem(`${keyFor(employeeId)}:storage-check`, "ok");
-  localStorage.removeItem(`${keyFor(employeeId)}:storage-check`);
+  try {
+    localStorage.setItem(`${keyFor(employeeId)}:storage-check`, "ok");
+    localStorage.removeItem(`${keyFor(employeeId)}:storage-check`);
+  } catch {
+    throw new WebAuthnError("El almacenamiento local no está permitido en este navegador (por ejemplo, modo privado).", "unavailable");
+  }
   const { options, challengeId } = await request("register-options", { empleadoId: employeeId, qrToken }, signal);
   const credential = await requestCredential(() => navigator.credentials.create({ signal, publicKey: {
     ...options, challenge: decode(options.challenge), user: { ...options.user, id: decode(options.user.id) },
@@ -85,12 +89,21 @@ export async function registerEmployeeDevice(employeeId: string, qrToken: string
   if (!credential) throw new WebAuthnError("La vinculación fue cancelada.");
   const result = await request("register-verify", { empleadoId: employeeId, qrToken, challengeId, response: serialize(credential) }, signal);
   if (result.verified !== true || !result.credentialId) throw new WebAuthnError("No se confirmó la vinculación.");
-  localStorage.setItem(keyFor(employeeId), result.credentialId);
+  try {
+    localStorage.setItem(keyFor(employeeId), result.credentialId);
+  } catch {
+    // Non-fatal
+  }
 }
 
 export async function authenticateEmployeeDevice(employeeId: string, qrToken: string, signal: AbortSignal): Promise<string> {
   assertSupported();
-  const credentialId = localStorage.getItem(keyFor(employeeId));
+  let credentialId: string | null = null;
+  try {
+    credentialId = localStorage.getItem(keyFor(employeeId));
+  } catch {
+    throw new WebAuthnError("El almacenamiento local no está permitido en este navegador. Podés fichar con el botón habitual.", "unavailable");
+  }
   if (!credentialId) throw new WebAuthnError("Vinculá tu huella o Face ID por primera vez desde los ajustes de tu perfil", "unlinked");
   const { options, challengeId } = await request("authenticate-options", { empleadoId: employeeId, qrToken, credentialId }, signal);
   const credential = await requestCredential(() => navigator.credentials.get({ signal, publicKey: {

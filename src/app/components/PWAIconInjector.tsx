@@ -48,81 +48,13 @@ function buildSvgDataUrl(bg: string, fg: string): string {
   return `data:image/svg+xml;base64,${b64}`;
 }
 
+/**
+ * PWAIconInjector
+ *
+ * Icons and manifests are now statically declared in index.html and public/manifest.json.
+ * Dynamic blob-URL injection was removed because it triggers SecurityError ("The operation is insecure")
+ * in WebKit / Safari on iOS devices.
+ */
 export function PWAIconInjector() {
-  useEffect(() => {
-    // Orange background + white mark  →  works on any OS chrome
-    const iconUrl = buildSvgDataUrl("#F97316", "#ffffff");
-
-    // ── 1. Apple Touch Icon (iOS) ──────────────────────────────────────────
-    let appleLink = document.querySelector(
-      'link[rel="apple-touch-icon"]'
-    ) as HTMLLinkElement | null;
-
-    if (!appleLink) {
-      appleLink = document.createElement("link");
-      appleLink.rel = "apple-touch-icon";
-      document.head.appendChild(appleLink);
-    }
-    appleLink.href = iconUrl;
-    appleLink.sizes = "180x180";
-
-    // ── 2. Dynamic Web App Manifest ────────────────────────────────────────
-    const manifestData = {
-      name: "Panahon – Fichaje",
-      short_name: "Panahon",
-      description: "Sistema de fichaje de Panahon",
-      start_url: "/fichaje",
-      scope: "/fichaje",
-      display: "standalone",
-      orientation: "portrait",
-      background_color: "#F97316",
-      theme_color: "#F97316",
-      icons: [
-        { src: iconUrl, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
-        { src: iconUrl, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" },
-      ],
-    };
-
-    const blob = new Blob([JSON.stringify(manifestData)], {
-      type: "application/manifest+json",
-    });
-    const blobUrl = URL.createObjectURL(blob);
-
-    let manifestLink = document.querySelector(
-      'link[rel="manifest"]'
-    ) as HTMLLinkElement | null;
-
-    if (manifestLink) {
-      const prev = (manifestLink as any).__prevBlobUrl as string | undefined;
-      if (prev) URL.revokeObjectURL(prev);
-      (manifestLink as any).__prevBlobUrl = blobUrl;
-      manifestLink.href = blobUrl;
-    } else {
-      manifestLink = document.createElement("link");
-      manifestLink.rel = "manifest";
-      manifestLink.href = blobUrl;
-      (manifestLink as any).__prevBlobUrl = blobUrl;
-      document.head.appendChild(manifestLink);
-    }
-
-    // ── 3. SVG favicon fallback ────────────────────────────────────────────
-    let faviconSvg = document.querySelector(
-      'link[rel="icon"][data-panahon]'
-    ) as HTMLLinkElement | null;
-
-    if (!faviconSvg) {
-      faviconSvg = document.createElement("link");
-      faviconSvg.rel = "icon";
-      faviconSvg.type = "image/svg+xml";
-      faviconSvg.setAttribute("data-panahon", "1");
-      document.head.appendChild(faviconSvg);
-    }
-    faviconSvg.href = iconUrl;
-
-    return () => {
-      URL.revokeObjectURL(blobUrl);
-    };
-  }, []);
-
   return null;
 }

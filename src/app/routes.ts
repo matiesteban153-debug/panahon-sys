@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router";
 import { RootLayout } from "./components/RootLayout";
+import { RootErrorBoundary } from "./components/RootErrorBoundary";
 import { LandingPage } from "./components/LandingPage";
 import { FichajeApp } from "./components/fichaje/FichajeApp";
 import { LoginPage } from "./components/admin/LoginPage";
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     Component: RootLayout,
+    ErrorBoundary: RootErrorBoundary,
     children: [
       { index: true, Component: LandingPage },
       { path: "fichaje", Component: FichajeApp },

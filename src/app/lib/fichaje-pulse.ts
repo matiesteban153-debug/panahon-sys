@@ -10,9 +10,25 @@
 
 import { trackEvent, type TrackEventParams } from "./telemetry";
 
+// ── Safe UUID generation ───────────────────────────────────────────────────────
+function safeGenerateUUID(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // fallback
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // ── Session context ────────────────────────────────────────────────────────────
 // Generated once per page load, persists in memory only.
-export const PULSE_SESSION_ID: string = crypto.randomUUID();
+export const PULSE_SESSION_ID: string = safeGenerateUUID();
 const PULSE_PAGE_LOAD: number = Date.now();
 export const PANAHON_VERSION = "1.0.0";
 

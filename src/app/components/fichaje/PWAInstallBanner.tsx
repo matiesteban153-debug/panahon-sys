@@ -15,9 +15,14 @@ export function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    // Check if banner was already dismissed
-    const dismissed = sessionStorage.getItem('pwa-banner-dismissed');
-    if (dismissed) return;
+    // Check if banner was already dismissed (wrapped in try/catch for Safari Private Browsing)
+    try {
+      const dismissed = sessionStorage.getItem('pwa-banner-dismissed');
+      if (dismissed) return;
+    } catch {
+      // In Safari Private Mode or restricted iframes, sessionStorage throws SecurityError
+      return;
+    }
 
     // Listen for beforeinstallprompt event
     const handleBeforeInstall = (e: Event) => {
@@ -57,7 +62,11 @@ export function PWAInstallBanner() {
 
   const handleDismiss = () => {
     setShowBanner(false);
-    sessionStorage.setItem('pwa-banner-dismissed', 'true');
+    try {
+      sessionStorage.setItem('pwa-banner-dismissed', 'true');
+    } catch {
+      // ignore
+    }
   };
 
   if (!showBanner) return null;
