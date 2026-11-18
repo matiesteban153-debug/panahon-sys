@@ -225,9 +225,11 @@ export function FichajeApp() {
       };
       setEmployees((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
       setScreen({ type: "action", employee: updated });
-      if (estado.estado === "en_jornada" && estado.hora_entrada &&
-          new Date(estado.hora_entrada).toLocaleDateString("es-AR") !== new Date().toLocaleDateString("es-AR")) {
-        setTurnoAbiertoModal(true);
+      if (estado.estado === "en_jornada" && estado.hora_entrada) {
+        const horasAbiertas = (Date.now() - new Date(estado.hora_entrada).getTime()) / (1000 * 60 * 60);
+        if (horasAbiertas > 18) {
+          setTurnoAbiertoModal(true);
+        }
       }
     } catch {
       setScreen({ type: "error", message: "No pudimos verificar si tenés un turno abierto. Volvé a seleccionar tu nombre para reintentar." });

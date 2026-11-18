@@ -24,10 +24,10 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [planActivo,    setPlanActivo]    = useState<boolean | null>(null);
-  const [exentoPago,    setExentoPago]    = useState<boolean | null>(null);
+  const [planActivo, setPlanActivo] = useState<boolean | null>(null);
+  const [exentoPago, setExentoPago] = useState<boolean | null>(null);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
-  const [planVencido,   setPlanVencido]   = useState<boolean>(false);
+  const [planVencido, setPlanVencido] = useState<boolean>(false);
   const [terminosAceptados, setTerminosAceptados] = useState<boolean | null>(null);
 
   useEffect(() => {
