@@ -1,8 +1,13 @@
 -- =====================================================
--- FIX PANAHON: Soporte de Turnos Nocturnos / Cross-Midnight
+-- FIX PANAHON: Soporte de Turnos Nocturnos, Guardias y Cross-Midnight
 -- =====================================================
 
--- 1. Actualizar 'trg_registros_calc'
+-- 1. Eliminar el tope de 24 horas para permitir guardias médicas, seguridad o turnos extendidos (24h, 36h, 48h)
+-- Solo se exige que las horas no sean negativas (horas_totales >= 0).
+ALTER TABLE public.registros DROP CONSTRAINT IF EXISTS chk_horas_nonnegative;
+ALTER TABLE public.registros ADD CONSTRAINT chk_horas_nonnegative CHECK (horas_totales IS NULL OR horas_totales >= 0);
+
+-- 2. Actualizar 'trg_registros_calc'
 -- Si la hora de salida es menor que la de entrada (ej: 01:00 < 18:00),
 -- traslada automáticamente la salida al día siguiente (+ 1 día).
 CREATE OR REPLACE FUNCTION public.trg_registros_calc()
@@ -36,9 +41,9 @@ BEGIN
 END;
 $$;
 
--- 2. Actualizar 'calcular_sueldo_salida'
+-- 3. Actualizar 'calcular_sueldo_salida'
 -- Garantiza que las horas trabajadas sean siempre positivas y contemple
--- turnos que cruzan la medianoche, feriados y tipos de jornada.
+-- turnos que cruzan la medianoche, guardias, feriados y tipos de jornada.
 CREATE OR REPLACE FUNCTION public.calcular_sueldo_salida()
 RETURNS TRIGGER
 LANGUAGE plpgsql

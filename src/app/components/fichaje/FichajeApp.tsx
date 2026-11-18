@@ -77,16 +77,16 @@ export function FichajeApp() {
   const qrToken = getQrToken();
 
   const [companyName, setCompanyName] = useState("Cargando...");
-  const [empresaId,   setEmpresaId]   = useState<string | null>(null);
-  const [employees,   setEmployees]   = useState<Employee[]>([]);
-  const [screen,      setScreen]      = useState<Screen>({ type: "loading" });
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [screen, setScreen] = useState<Screen>({ type: "loading" });
   const [splashVisible, setSplashVisible] = useState(true);
   const [planVencidoModalMsg, setPlanVencidoModalMsg] = useState<string | null>(null);
   const [turnoAbiertoModal, setTurnoAbiertoModal] = useState(false);
   const selectingRef = useRef(false);
 
   const minTimeElapsed = useRef(false);
-  const dataReadyRef   = useRef(false);
+  const dataReadyRef = useRef(false);
 
   const tryDismissSplash = useCallback(() => {
     if (minTimeElapsed.current && dataReadyRef.current) {
@@ -100,7 +100,7 @@ export function FichajeApp() {
       evento: "qr_abierto",
       metadata: { qr_token_presente: !!qrToken },
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Minimum splash duration: 2.2 s
@@ -202,7 +202,7 @@ export function FichajeApp() {
     }
 
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelect = useCallback(async (employee: Employee) => {
@@ -225,12 +225,6 @@ export function FichajeApp() {
       };
       setEmployees((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
       setScreen({ type: "action", employee: updated });
-      if (estado.estado === "en_jornada" && estado.hora_entrada) {
-        const horasAbiertas = (Date.now() - new Date(estado.hora_entrada).getTime()) / (1000 * 60 * 60);
-        if (horasAbiertas > 18) {
-          setTurnoAbiertoModal(true);
-        }
-      }
     } catch {
       setScreen({ type: "error", message: "No pudimos verificar si tenés un turno abierto. Volvé a seleccionar tu nombre para reintentar." });
     } finally {
