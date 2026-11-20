@@ -39,9 +39,29 @@ export function registerWebAuthnRoutes(app: Hono, resolveEmpresa: any, validateE
       }
       let adminId: string | null = null;
       if (operation.startsWith("register")) {
-        const admin = await resolveAdmin(client, context.req.header("Authorization") ?? null);
-        if (!admin.ok || admin.empresaId !== empresa.empresaId) return context.json({ error: "La primera vinculación requiere una sesión autorizada del administrador de tu empresa en este celular." }, 403);
-        adminId = admin.userId;
+        const authHeader = context.req.header("Authorization");
+        if (authHeader) {
+          try {
+            const admin = await resolveAdmin(client, authHeader);
+            if (admin.ok && admin.empresaId === empresa.empresaId) {
+              adminId = admin.userId;
+            }
+          } catch {
+            // Continúa en modo autoservicio para el empleado
+          }
+        }
+        // Si no hay admin presente y el empleado ya tiene un dispositivo registrado, se evita sobrescritura no autorizada
+        if (!adminId) {
+          const { count, error: countErr } = await client
+            .from("employee_webauthn_credentials")
+            .select("credential_id", { count: "exact", head: true })
+            .eq("empleado_id", body.empleadoId);
+          if (!countErr && (count ?? 0) > 0) {
+            return context.json({
+              error: "Tu perfil ya tiene un celular vinculado. Si cambiaste de dispositivo, pedile a tu encargado que reinicie tu vinculación desde el panel de empleados."
+            }, 403);
+          }
+        }
       }
       if (operation === "register-options") {
         const { data: employeeData, error: employeeError } = await client.from("empleados").select("nombre_completo").eq("id", body.empleadoId).single();
@@ -71,13 +91,13 @@ export function registerWebAuthnRoutes(app: Hono, resolveEmpresa: any, validateE
       if (typeof body.challengeId !== "string" || !body.response) return context.json({ error: "Falta la respuesta WebAuthn" }, 400);
       const { data: challenge, error: challengeError } = await client.from("employee_webauthn_challenges").delete().eq("id", body.challengeId).eq("empleado_id", body.empleadoId).eq("operation", operation === "register-verify" ? "register" : "authenticate").gt("expires_at", new Date().toISOString()).select().maybeSingle();
       if (challengeError) throw challengeError;
-      if (!challenge || (operation === "register-verify" && challenge.admin_id !== adminId)) return context.json({ error: "La solicitud expiró o ya fue utilizada. Volvé a intentar." }, 403);
+      if (!challenge) return context.json({ error: "La solicitud expiró o ya fue utilizada. Volvé a intentar." }, 403);
       if (operation === "register-verify") {
         const result = await verifyRegistrationResponse({ response: body.response, expectedChallenge: challenge.challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: true });
         if (!result.verified || !result.registrationInfo) return context.json({ error: "No se pudo verificar la credencial" }, 403);
         const info = result.registrationInfo;
-        // Permitimos credenciales sincronizadas (ej: iCloud Keychain en iPhone) —
-        // la identidad sigue verificada por Face ID / huella del sistema operativo.
+        // Limpiamos credenciales previas para dejar activo solo este celular
+        await client.from("employee_webauthn_credentials").delete().eq("empleado_id", body.empleadoId);
         const { error } = await client.from("employee_webauthn_credentials").insert({ empleado_id: body.empleadoId, credential_id: info.credential.id, public_key: isoBase64URL.fromBuffer(info.credential.publicKey), counter: info.credential.counter, transports: info.credential.transports ?? [] });
         if (error) throw error;
         return context.json({ verified: true, credentialId: info.credential.id });
