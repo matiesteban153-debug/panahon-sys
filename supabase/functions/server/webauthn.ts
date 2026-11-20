@@ -76,7 +76,8 @@ export function registerWebAuthnRoutes(app: Hono, resolveEmpresa: any, validateE
         const result = await verifyRegistrationResponse({ response: body.response, expectedChallenge: challenge.challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: true });
         if (!result.verified || !result.registrationInfo) return context.json({ error: "No se pudo verificar la credencial" }, 403);
         const info = result.registrationInfo;
-        if (info.credentialDeviceType !== "singleDevice" || info.credentialBackedUp) return context.json({ error: "Este dispositivo ofrece una clave sincronizada. Para limitar el fichaje a este celular se requiere una credencial no sincronizable. Podés usar el fichaje habitual." }, 403);
+        // Permitimos credenciales sincronizadas (ej: iCloud Keychain en iPhone) —
+        // la identidad sigue verificada por Face ID / huella del sistema operativo.
         const { error } = await client.from("employee_webauthn_credentials").insert({ empleado_id: body.empleadoId, credential_id: info.credential.id, public_key: isoBase64URL.fromBuffer(info.credential.publicKey), counter: info.credential.counter, transports: info.credential.transports ?? [] });
         if (error) throw error;
         return context.json({ verified: true, credentialId: info.credential.id });
@@ -85,7 +86,7 @@ export function registerWebAuthnRoutes(app: Hono, resolveEmpresa: any, validateE
       const { data: credential, error } = await client.from("employee_webauthn_credentials").select().eq("credential_id", challenge.credential_id).eq("empleado_id", body.empleadoId).single();
       if (error) throw error;
       const result = await verifyAuthenticationResponse({ response: body.response, expectedChallenge: challenge.challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: true, credential: { id: credential.credential_id, publicKey: isoBase64URL.toBuffer(credential.public_key), counter: Number(credential.counter), transports: credential.transports } });
-      if (!result.verified || result.authenticationInfo.credentialDeviceType !== "singleDevice" || result.authenticationInfo.credentialBackedUp) return context.json({ error: "La verificación del dispositivo falló" }, 403);
+      if (!result.verified) return context.json({ error: "La verificación del dispositivo falló" }, 403);
       const { data: updated, error: updateError } = await client.from("employee_webauthn_credentials").update({ counter: result.authenticationInfo.newCounter }).eq("credential_id", credential.credential_id).eq("counter", credential.counter).select("credential_id").maybeSingle();
       if (updateError || !updated) return context.json({ error: "La credencial cambió. Volvé a verificar." }, 403);
       const { data: proof, error: proofError } = await client.from("employee_webauthn_proofs").insert({ empleado_id: body.empleadoId }).select("id").single();
