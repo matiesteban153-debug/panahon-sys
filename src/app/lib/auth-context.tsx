@@ -9,6 +9,7 @@ import {
 import * as Sentry from "@sentry/react";
 import { projectId, publicAnonKey } from "../../../utils/supabase/info";
 import { useIdleTimeout } from "./useIdleTimeout";
+import { IdleWarningModal } from "../components/admin/IdleWarningModal";
 import { trackEvent } from "./telemetry";
 import { getFriendlyError } from "./errorUtils";
 import { isDemoUser } from "./demo";
@@ -61,10 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [adminLoading, setAdminLoading] = useState(false);
   const supabaseRef = useRef<any>(null);
 
-  // ── Idle timeout: cerrar sesión después de 5 minutos de inactividad ──
-  useIdleTimeout({
+  // ── Idle timeout: 5 minutos de inactividad -> Cartel de 10 minutos -> Extensión de 10m ──
+  const {
+    isWarningVisible,
+    remainingSeconds,
+    continueSession,
+    logout: idleLogout,
+  } = useIdleTimeout({
     onIdle: async () => {
-      console.log("[Auth] Inactividad detectada, cerrando sesión automáticamente");
+      console.log("[Auth] Inactividad alcanzada sin respuesta, cerrando sesión");
       const client = supabaseRef.current;
       if (client) {
         try {
@@ -77,7 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAdmin(null);
       setAdminLoading(false);
     },
-    idleTime: 5 * 60 * 1000, // 5 minutos
+    initialIdleTime: 5 * 60 * 1000, // 5 minutos iniciales
+    extendedIdleTime: 10 * 60 * 1000, // 10 minutos si el usuario mantiene la sesión
+    warningDuration: 10 * 60, // 10 minutos dura el cartel
     enabled: !!session, // Solo activar cuando hay sesión activa
   });
 
@@ -440,6 +448,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{ session, admin, loading, adminLoading, signIn, signUp, signOut }}>
       {children}
+      {session && isWarningVisible && (
+        <IdleWarningModal
+          isOpen={isWarningVisible}
+          remainingSeconds={remainingSeconds}
+          onContinue={continueSession}
+          onLogout={idleLogout}
+        />
+      )}
     </AuthContext.Provider>
   );
 }

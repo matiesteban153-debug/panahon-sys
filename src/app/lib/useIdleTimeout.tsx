@@ -1,79 +1,142 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 interface UseIdleTimeoutOptions {
   onIdle: () => void;
-  idleTime?: number; // milliseconds, default 5 minutes
-  enabled?: boolean; // whether the timeout is active
+  initialIdleTime?: number; // Tiempo inicial de inactividad (5 minutos por defecto)
+  extendedIdleTime?: number; // Tiempo de inactividad al extender (10 minutos por defecto)
+  warningDuration?: number; // Duración en segundos que permanece visible el cartel (10 minutos = 600s por defecto)
+  enabled?: boolean;
 }
 
 /**
- * Hook para detectar inactividad del usuario y ejecutar un callback
- * cuando se alcanza el tiempo límite sin interacción.
+ * Hook para gestionar el timeout de inactividad:
+ * 1. Espera 5 minutos iniciales de inactividad.
+ * 2. Muestra un cartel de advertencia que dura 10 minutos con cuenta regresiva.
+ * 3. Si el usuario elige "Mantener sesión", se extiende por 10 minutos adicionales (y se repite cada 10m si no hay interacción).
+ * 4. Si el usuario elige "Cerrar sesión" o el cartel expira (10m sin responder), se cierra la sesión automáticamente.
  */
 export function useIdleTimeout({
   onIdle,
-  idleTime = 5 * 60 * 1000, // 5 minutos por defecto
+  initialIdleTime = 5 * 60 * 1000, // 5 minutos
+  extendedIdleTime = 10 * 60 * 1000, // 10 minutos al extender
+  warningDuration = 10 * 60, // 10 minutos (600 segundos) de duración del cartel
   enabled = true,
 }: UseIdleTimeoutOptions) {
+  const [isWarningVisible, setIsWarningVisible] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState(warningDuration);
+
+  // Guarda el intervalo activo: empieza en 5m, y si extiende pasa a 10m
+  const currentIdleTimeRef = useRef(initialIdleTime);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onIdleRef = useRef(onIdle);
 
-  // Mantener callback actualizado
   useEffect(() => {
     onIdleRef.current = onIdle;
   }, [onIdle]);
 
+  const clearAllTimers = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+  }, []);
+
+  const triggerLogout = useCallback(() => {
+    clearAllTimers();
+    setIsWarningVisible(false);
+    onIdleRef.current();
+  }, [clearAllTimers]);
+
+  const startWarningCountdown = useCallback(() => {
+    setIsWarningVisible(true);
+    setRemainingSeconds(warningDuration);
+
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
+
+    const startTime = Date.now();
+    const endTime = startTime + warningDuration * 1000;
+
+    countdownIntervalRef.current = setInterval(() => {
+      const now = Date.now();
+      const left = Math.max(0, Math.round((endTime - now) / 1000));
+      setRemainingSeconds(left);
+
+      if (left <= 0) {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        triggerLogout();
+      }
+    }, 1000);
+  }, [warningDuration, triggerLogout]);
+
+  const resetIdleTimer = useCallback(() => {
+    if (isWarningVisible) return; // Si el cartel ya está abierto, solo responde a sus botones
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(() => {
+      startWarningCountdown();
+    }, currentIdleTimeRef.current);
+  }, [isWarningVisible, startWarningCountdown]);
+
+  // Handler cuando el usuario hace clic en "Mantener sesión"
+  const continueSession = useCallback(() => {
+    clearAllTimers();
+    setIsWarningVisible(false);
+    // Para las siguientes comprobaciones, se mantiene en 10 minutos
+    currentIdleTimeRef.current = extendedIdleTime;
+    setRemainingSeconds(warningDuration);
+
+    timeoutRef.current = setTimeout(() => {
+      startWarningCountdown();
+    }, extendedIdleTime);
+  }, [clearAllTimers, extendedIdleTime, warningDuration, startWarningCountdown]);
+
   useEffect(() => {
     if (!enabled) {
-      // Si está deshabilitado, limpiar timeout y listeners
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
+      clearAllTimers();
+      setIsWarningVisible(false);
       return;
     }
 
-    console.log("[IdleTimeout] Activado, tiempo límite:", idleTime / 1000, "segundos");
-
-    // Iniciar el temporizador
-    const resetTimer = () => {
-      // Limpiar temporizador anterior si existe
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-
-      // Crear nuevo temporizador
-      timeoutRef.current = setTimeout(() => {
-        console.log("[IdleTimeout] Tiempo de inactividad alcanzado, ejecutando callback");
-        onIdleRef.current();
-      }, idleTime);
-    };
-
-    // Eventos de interacción del usuario
     const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
 
-    // Handler para todos los eventos
     const handleUserActivity = () => {
-      resetTimer();
+      if (!isWarningVisible) {
+        resetIdleTimer();
+      }
     };
 
-    // Registrar listeners
     events.forEach((event) => {
       window.addEventListener(event, handleUserActivity, { passive: true });
     });
 
-    // Iniciar el temporizador por primera vez
-    resetTimer();
+    // Iniciar temporizador
+    resetIdleTimer();
 
-    // Cleanup: remover listeners y limpiar timeout
     return () => {
-      console.log("[IdleTimeout] Limpiando event listeners y timeout");
+      clearAllTimers();
       events.forEach((event) => {
         window.removeEventListener(event, handleUserActivity);
       });
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
     };
-  }, [enabled, idleTime]);
+  }, [enabled, isWarningVisible, resetIdleTimer, clearAllTimers]);
+
+  return {
+    isWarningVisible,
+    remainingSeconds,
+    continueSession,
+    logout: triggerLogout,
+  };
 }
